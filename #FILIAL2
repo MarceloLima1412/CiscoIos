@@ -1,0 +1,121 @@
+#FILIAL2
+
+#PPPOE
+hostname Filial2
+
+interface GigabitEthernet0/0/0
+ no shutdown
+ no ip address
+ pppoe enable
+ pppoe-client dial-pool-number 3
+!
+interface Dialer1
+ mtu 1492
+ ip address negotiated
+ encapsulation ppp
+ dialer pool 3
+ ppp authentication chap 
+ ppp chap password MyPassword
+ ppp chap hostname Filial2
+
+ !
+ ip route 0.0.0.0 0.0.0.0 192.100.1.201
+
+#VLANS
+interface FastEthernet0/0
+ no ip address
+ duplex half
+ no shutdown
+
+interface FastEthernet0/0.1
+ encapsulation dot1Q 10
+ ip address 192.100.1.158 255.255.255.224
+
+interface FastEthernet0/0.2
+ encapsulation dot1Q 20
+ ip address 192.100.1.174 255.255.255.240
+
+interface FastEthernet0/0.3
+ encapsulation dot1Q 30
+ ip address 192.100.1.182 255.255.255.248
+
+####DHCP
+ip dhcp pool VLAN10
+ network 192.100.1.128 255.255.255.224
+ default-router 192.100.1.158
+
+ip dhcp pool VLAN20
+ network 192.100.1.160 255.255.255.240
+ default-router 192.100.1.174
+
+ip dhcp pool VLAN30
+ network 192.100.1.176 255.255.255.248
+ default-router 192.100.1.182
+
+#NAT
+ip nat inside source list 1 interface Gig0/0/0 overload
+access-list 1 permit 192.100.1.128 0.0.0.192
+
+interface f0/0
+ip nat inside
+
+interface gig0/0/0
+ip nat outside
+
+#TUNEL IPSEC - R2-R3
+ access-list 110 permit ip 192.100.1.128 0.0.0.63 192.100.1.64 0.0.0.63
+
+crypto isakmp policy 10
+ encryption aes
+ authentication pre-share
+ group 2
+ exit
+
+crypto isakmp key cisco address 192.100.1.201
+crypto ipsec transform-set VPN-SET esp-3des esp-sha-hmac
+crypto map VPN-MAP 30 ipsec-isakmp
+description VPN connection R2 to R3
+set peer 192.100.1.201
+set transform-set VPN-SET
+match address 110
+exit
+
+interface dialer1
+ crypto map VPN-MAP
+
+
+#IPSEC TUNEL R1-R3
+access-list 112 permit ip 192.100.1.128 0.0.0.63 192.100.1.0 0.0.0.63
+
+crypto isakmp policy 10
+ encryption aes
+ authentication pre-share
+ group 2
+ exit
+
+crypto isakmp key cisco address 192.100.1.193
+crypto ipsec transform-set VPN-SET esp-3des esp-sha-hmac
+crypto map VPN-MAP 20 ipsec-isakmp
+    description VPN connection R1 to R3
+    set peer 192.100.1.193
+    set transform-set VPN-SET
+    match address 112
+exit
+
+
+#No switch
+
+interface f0/1
+switchport mode trunk
+
+interface f2/1
+switchport mode access
+switchport access vlan 10
+
+interface f3/1
+switchport mode access
+switchport access vlan 20
+
+interface f1/1
+switchport mode access
+switchport access vlan 30
